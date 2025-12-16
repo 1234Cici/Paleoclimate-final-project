@@ -1,0 +1,180 @@
+---
+title: "Panama_isotope_salinity"
+author: "Weidai Sun"
+date: "2025-10-22"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(lubridate)
+library(readr)
+library(tidyverse)
+library(ggplot2)
+library(scales)
+```
+
+# Input water isotope data
+```{r}
+Panama_water <- list.files(path = "~/Desktop/Picarro/Calibrated_data/", pattern = "\\.csv$", full.names = TRUE)
+Panama_water <- Panama_water |> map_dfr(read_csv) 
+```
+
+# Extract useful columns
+```{r}
+Panama_iso <- Panama_water |> 
+  select('sample_name', 'd18O_cal_mean', 'd18O_cal_opt')
+Panama_iso <- na.omit(Panama_iso)
+Panama_iso <- Panama_iso[!duplicated(Panama_iso$sample_name, fromLast = TRUE), ]
+```
+
+# Calculate the average from the last injections
+```{r}
+Panama_avg <- Panama_iso |> 
+  group_by(`Identifier 1`) |> 
+  slice_tail(n = 5) |> 
+  summarize(avg_d18O = mean(`d(18_16)Mean`, na.rm = TRUE), 
+            avg_dD   = mean(`d(D_H)Mean`, na.rm = TRUE)
+  )
+```
+
+# Input salinity data
+```{r}
+Panama_salinity <- list.files(path = "~/Desktop/Picarro/Salinity/", pattern = "\\.csv$", full.names = TRUE)
+Panama_salinity <- Panama_salinity |> map_dfr(read_csv, col_names = FALSE) 
+```
+ 
+# Cleaning
+```{r}
+colnames(Panama_salinity) <- c("sample_name", "SSS")
+Panama_salinity <- Panama_salinity |>
+  group_by(sample_name) |> summarize(SSS = max(`SSS`, na.rm = T))
+```
+
+# Combine salinity & average isotope values
+```{r}
+Panama_df <- Panama_iso |> left_join(Panama_salinity, by = "sample_name")
+```
+
+# Add location column
+```{r}
+Panama_df$Location <- 
+  ifelse(grepl("almirante|\\bAL\\b", Panama_df$sample_name, ignore.case = TRUE), "Almirante", ifelse(grepl("colon norte|\\bCN\\b", Panama_df$sample_name, ignore.case = TRUE), "Colon Norte", ifelse(grepl("cristobal|\\bCR\\b", Panama_df$sample_name, ignore.case = TRUE), "Cristobal", ifelse(grepl("drago|\\bDR\\b", Panama_df$sample_name, ignore.case = TRUE), "Drago", ifelse(grepl("pastores|\\bPA\\b", Panama_df$sample_name, ignore.case = TRUE),"Pastores", ifelse(grepl("stri|\\bST\\b", Panama_df$sample_name, ignore.case = TRUE), "STRI", NA))))))
+```
+
+# Add 0.5m column
+```{r}
+Panama_df$Depth <- ifelse(grepl("0.5m", Panama_df$`Identifier 1`), "0.5m", "20m")
+```
+
+# Change the name
+```{r}
+Panama_df$sample_name[which(Panama_df$sample_name=="AL 200929")] <- "Almirante 29-Sep-2020"
+Panama_df$sample_name[which(Panama_df$sample_name=="CN 200929")] <- "Colon Norte 29-Sep-2020"
+Panama_df$sample_name[which(Panama_df$sample_name=="CR 200929")] <- "Cristobal 29-Sep-2020"
+Panama_df$sample_name[which(Panama_df$sample_name=="DR 200929")] <- "Drago 29-Sep-2020"
+Panama_df$sample_name[which(Panama_df$sample_name=="PA 200929")] <- "Pastores 29-Sep-2020"
+Panama_df$sample_name[which(Panama_df$sample_name=="ST 200929")] <- "STRI 29-Sep-2020"
+```
+
+
+# Save data
+```{r}
+#Panama_df <- Panama_df[Panama_df$d18O_cal_opt>0, ]
+write.csv(Panama_df, "~/Desktop/Picarro/Panama_df.csv", row.names = FALSE)
+```
+
+--------------------------------------------------------------------------------
+# Plot
+```{r}
+avg_points <- Panama_df %>%
+  group_by(Location, Depth, Salinity_PSU) %>%
+  summarise(mean_d18O = mean(avg_d18O, na.rm = TRUE), .groups = "drop")
+
+
+ggplot(Panama_df, aes(x = Salinity_PSU, y = avg_d18O,
+                      color = Location, shape = Depth)) +
+  geom_point(size = 3, stroke = 1.1) +
+  facet_wrap(~ Location, ncol = 3) +
+  scale_color_brewer(palette = "Set2") +
+  scale_shape_manual(values = c("0.5m" = 8, "20m" = 24)) +
+  labs(
+    x = "Salinity (PSU)",
+    y = expression(delta^{18}*O~("\u2030"))
+  ) +
+  theme_classic(base_size = 12) +
+  theme(
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold"),
+    legend.position = "right",
+    panel.grid.major = element_line(color = "grey90"),
+    panel.grid.minor = element_blank(), 
+    aspect.ratio = 1
+  ) + 
+  scale_x_continuous(
+    limits = c(23, 36),           
+    breaks = seq(23, 36, by = 1) 
+  ) +
+  scale_y_continuous(           
+    limits = c(0.3, 2.8),
+    breaks = seq(0.3, 2.8, 0.5),
+  ) +
+  geom_line(data = avg_points,
+            aes(x = Salinity_PSU, y = mean_d18O, group = Depth),
+            color = "red", linewidth = 0.7, linetype = "solid") +
+  
+  # average points (same shape as depth)
+  geom_point(data = avg_points,
+             aes(x = Salinity_PSU, y = mean_d18O, shape = Depth),
+             size = 2, color = "black", fill = "white") 
+
+#   scale_y_continuous(           
+    #trans = trans_new("exp", transform = exp, inverse = log),
+    #breaks = seq(0.8, 2.8, 0.5),
+    #labels = function(y) sprintf("%.2f", y))
+```
+
+```{r}
+avg_points <- Panama_df %>%
+  group_by(Location, Depth, Salinity_PSU) %>%
+  summarise(mean_dD = mean(avg_dD, na.rm = TRUE), .groups = "drop")
+
+ggplot(Panama_df, aes(x = Salinity_PSU, y = avg_dD,
+                      color = Location, shape = Depth)) +
+  geom_point(size = 3, stroke = 1.1) +
+  facet_wrap(~ Location, ncol = 3) +
+  scale_color_brewer(palette = "Set2") +
+  scale_shape_manual(values = c("0.5m" = 8, "20m" = 24)) +
+  labs(
+    x = "Salinity (PSU)",
+    y = expression(delta*D~("\u2030"))
+  ) +
+  theme_classic(base_size = 12) +
+  theme(
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold"),
+    legend.position = "right",
+    panel.grid.major = element_line(color = "grey90"),
+    panel.grid.minor = element_blank(), 
+    aspect.ratio = 1
+  ) + 
+  scale_x_continuous(
+    limits = c(23, 36),           
+    breaks = seq(23, 36, by = 1) 
+  ) +
+  scale_y_continuous(           
+    limits = c(-1.5, 12),
+    breaks = seq(-1.5, 12, 0.5)
+  )+
+  geom_line(data = avg_points,
+            aes(x = Salinity_PSU, y = mean_dD, group = Depth),
+            color = "blue", linewidth = 0.7, linetype = "solid") +
+  
+  geom_point(data = avg_points,
+             aes(x = Salinity_PSU, y = mean_dD, shape = Depth),
+             size = 2, color = "black", fill = "white")  
+
+```
+
+
