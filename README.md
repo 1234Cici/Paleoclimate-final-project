@@ -1,7 +1,10 @@
 # Paleoclimate-final-project
 For the purpose of paleoclimate final project: data and codes for Bahia Almirante project (2020-2021)
+
 Raw_d18O: contains d18O measurements from Picarro
+
 Raw_salinity: contains salinity measurements from refractometer
+
 Corrected_d18O: contains d18O data after memory and drift corrections
 Final_data: contains merged datasets with useful information including corrected d18O, SSS anomalies, SST anomalies and date
 Panama_isotope_salinity.Rmd: merging isotope data with salinity measurements
