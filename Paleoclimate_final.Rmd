@@ -1,0 +1,89 @@
+---
+title: "Paleoclimate_Final"
+author: "Weidai Sun"
+date: "2025-12-01"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(lubridate)
+library(readr)
+library(tidyverse)
+library(ggplot2)
+library(scales)
+```
+
+## Read the data
+
+```{r}
+Panama <- read.csv('~/Desktop/Picarro/Panama_df.csv')
+```
+
+# Add date
+```{r}
+Panama <- Panama %>%
+  mutate(Date = str_extract(sample_name, "\\d{1,2}-[A-Za-z]{3}-\\d{4}"))
+Panama <- Panama %>%
+  mutate(Date = as.Date(Date, format = "%d-%b-%Y"))
+Panama <- Panama %>% group_by(Location) %>% arrange(Date)
+```
+
+# SST data 
+```{r}
+SST <- read.csv('~/Desktop/Picarro/Bocas_tower_wt/bocas_tower_wt_elect.csv')
+```
+
+# Calcualte average SST data 
+```{r}
+SST_Panama <- SST %>%
+  mutate(Date = parse_date_time(date, orders = c("d/m/y", "d/m/Y", "m/d/y", "m/d/Y"))) %>%
+  filter(between(Date, as.Date("2020-01-01"), as.Date("2021-12-31"))) %>% 
+  arrange(Date) %>%
+  group_by(Date) %>%
+  summarize(SST = mean(wt, na.rm = TRUE))
+```
+
+# Add SST data to Panama dataset 
+```{r}
+Panama <- Panama %>% left_join(SST_Panama, by = "Date")
+```
+
+# Add SSS anomalies and SST anomalies
+```{r}
+Panama$SST_anomalies <- Panama$SST - mean(Panama$SST, na.rm = T)
+Panama$SSS_anomalies <- Panama$SSS - mean(Panama$SSS, na.rm = T)
+```
+
+# Subset - Locations
+```{r}
+Almirante <- subset(Panama, Location == "Almirante")
+Colon_Norte <- subset(Panama, Location == "Colon Norte")
+Cristobal <- subset(Panama, Location == "Cristobal")
+Drago <- subset(Panama, Location == "Drago")
+Pastores <- subset(Panama, Location == "Pastores")
+STRI <- subset(Panama, Location == "STRI")
+```
+
+# Add individual SSS anomalies
+```{r}
+Almirante$SSS_anom_ind <- Almirante$SSS - mean(Almirante$SSS, na.rm = T)
+Colon_Norte$SSS_anom_ind <- Colon_Norte$SSS - mean(Colon_Norte$SSS, na.rm = T)
+Cristobal$SSS_anom_ind <- Cristobal$SSS - mean(Cristobal$SSS, na.rm = T)
+Drago$SSS_anom_ind <- Drago$SSS - mean(Drago$SSS, na.rm = T)
+Pastores$SSS_anom_ind <- Pastores$SSS - mean(Pastores$SSS, na.rm = T)
+STRI$SSS_anom_ind <- STRI$SSS - mean(STRI$SSS, na.rm = T)
+```
+
+# Save files
+```{r}
+write.csv(Panama, "~/Desktop/EEPS_634_Paleoclimate/Final_Project/data/df", row.names = F)
+write.csv(Almirante, "~/Desktop/EEPS_634_Paleoclimate/Final_Project/data/Almirante", row.names = F)
+write.csv(Colon_Norte, "~/Desktop/EEPS_634_Paleoclimate/Final_Project/data/Colon_Norte", row.names = F)
+write.csv(Cristobal, "~/Desktop/EEPS_634_Paleoclimate/Final_Project/data/Cristobal", row.names = F)
+write.csv(Drago, "~/Desktop/EEPS_634_Paleoclimate/Final_Project/data/Drago", row.names = F)
+write.csv(Pastores, "~/Desktop/EEPS_634_Paleoclimate/Final_Project/data/Pastores", row.names = F)
+write.csv(STRI, "~/Desktop/EEPS_634_Paleoclimate/Final_Project/data/STRI", row.names = F)
+```
+
